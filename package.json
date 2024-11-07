@@ -19,6 +19,7 @@
     "clsx": "^2.0.0",
     "next": "^14.0.2",
     "next-auth": "^5.0.0-beta.5",
+    "pg": "^8.13.1",
     "postcss": "8.4.31",
     "react": "18.2.0",
     "react-dom": "18.2.0",
@@ -41,5 +42,11 @@
   },
   "engines": {
     "node": ">=18.17.0"
-  }
+  },
+  "name": "achma-dashbord",
+  "version": "1.0.0",
+  "description": "This is the starter template for the Next.js App Router Course. It contains the starting code for the dashboard application.",
+  "main": "next.config.js",
+  "author": "",
+  "license": "ISC"
 }
