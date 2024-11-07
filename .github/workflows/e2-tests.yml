@@ -1,0 +1,70 @@
+name: E2E Tests
+
+on:
+  pull_request:
+    branches: 
+      - master
+  # Allow running the workflow manually from the GitHub Actions tab.
+  workflow_dispatch:
+
+# Define the jobs in this workflow.
+jobs:
+  e2e-tests:
+    # Run this job on the latest Ubuntu (Linux) runner hosted by GitHub.
+    runs-on: ubuntu-latest
+    # Limit the execution time of this job to 15 minutes.
+    timeout-minutes: 15
+    # Define the steps in this job.
+    steps:
+      # Checkout the this repository.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image for React app
+        working-directory: ./react-app
+        run: docker build -t react-app .
+
+      # Build and start the "react-app" container in detached mode to avoid blocking the workflow.
+      - name: Start local environment with Docker Compose
+        run: docker compose up -d
+
+      # Build the Docker image for E2E tests.
+      - name: Build E2E Docker image
+        working-directory: ./e2e
+        run: docker build -t playwright-tests .
+
+      # Execute the E2E tests 
+      - name: Run E2E tests against local environment
+        working-directory: ./e2e
+        run: docker run --rm -v $(pwd)/e2e-report:/app/e2e-report --name playwright-tests --network=host playwright-tests yarn e2etest:ci
+
+      # List running Docker containers
+      - name: List running Docker containers
+        run: docker ps -a
+
+      # Prepare the logs for all containers.
+      - name: Prepare container logs
+        if: always() # Ensure logs are captured, even if the tests fail.
+        run: |
+          # Create the "logs" directory
+          mkdir -p logs
+
+          # Export each Docker container's logs to files in the "logs" directory.
+          docker logs react-app >& logs/react-app.log || echo "react-app container not found"
+          docker logs playwright-tests >& logs/playwright-tests.log || echo "playwright-tests container not found"
+
+      # Upload the logs for all containers as an artifact.
+      - name: Upload container logs
+        if: always() # Ensure logs are captured, even if the tests fail.
+        uses: actions/upload-artifact@v4
+        with:
+          name: E2E Logs
+          path: logs/
+
+      # Upload the test report and video recordings as an artifact.
+      - name: Upload Test Report
+        if: always() # Ensure test report is captured, even if the tests fail.
+        uses: actions/upload-artifact@v4
+        with:
+          name: E2E Test Report
+          path: e2e/e2e-report
