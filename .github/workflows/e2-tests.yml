@@ -3,7 +3,7 @@ name: E2E Tests
 on:
   pull_request:
     branches: 
-      - master
+      - main
   # Allow running the workflow manually from the GitHub Actions tab.
   workflow_dispatch:
 
