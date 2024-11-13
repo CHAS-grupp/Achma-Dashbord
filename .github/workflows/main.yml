@@ -36,8 +36,12 @@ jobs:
         uses: actions/github-script@v6
         with:
           script: |
-            const id_token = await github.getIDToken('sts.amazonaws.com');
+            const id_token = await core.getIDToken('sts.amazonaws.com');
             core.setOutput('id_token', id_token);
+
+      # Add the Install jq step here
+      - name: Install jq
+        run: sudo apt-get install -y jq
 
       - name: Extract 'sub' Claim from OIDC Token
         run: |
