@@ -39,7 +39,6 @@ jobs:
             const id_token = await core.getIDToken('sts.amazonaws.com');
             core.setOutput('id_token', id_token);
 
-      # Add the Install jq step here
       - name: Install jq
         run: sudo apt-get install -y jq
 
@@ -51,7 +50,20 @@ jobs:
             echo "OIDC token not available."
             exit 1
           fi
-          PAYLOAD=$(echo "${OIDC_TOKEN}" | cut -d '.' -f2 | tr '_-' '/+' | base64 --decode)
+          PAYLOAD=$(echo "${OIDC_TOKEN}" | cut -d '.' -f2)
+          # Replace base64url characters with base64 characters
+          PAYLOAD=$(echo "${PAYLOAD}" | tr '_-' '/+')
+          # Add necessary padding
+          PADDING=$(( (4 - ${#PAYLOAD} % 4) % 4 ))
+          if [ $PADDING -gt 0 ]; then
+            PAYLOAD="${PAYLOAD}$(printf '=%.0s' $(seq 1 $PADDING))"
+          fi
+          # Decode the payload
+          PAYLOAD=$(echo "${PAYLOAD}" | base64 --decode)
+          if [ $? -ne 0 ]; then
+            echo "Failed to decode base64url payload"
+            exit 1
+          fi
           SUB_CLAIM=$(echo "${PAYLOAD}" | jq -r '.sub')
           echo "The 'sub' claim is: ${SUB_CLAIM}"
         shell: bash
