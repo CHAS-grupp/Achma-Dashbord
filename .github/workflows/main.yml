@@ -1,28 +1,30 @@
 name: CodeGuru Security Example
-on:
+on:  
   push:
+    branches:
+      - 'main'
+      - 'codeguru'
+  pull_request:
     branches:
       - 'main'
 
 permissions:
   id-token: write
-  # for writing security events
-  security-events: write
-  # only required for workflows in private repositories
-  actions: read
   contents: read
+  security-events: write
+  actions: read
 
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Configure aws credentials
-        uses: aws-actions/configure-aws-credentials@v2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v3
         with:
           role-to-assume: arn:aws:iam::904233125795:role/acme-admin
           aws-region: eu-north-1
@@ -34,14 +36,13 @@ jobs:
           source_path: .
           aws_region: eu-north-1
           fail_on_severity: Critical
+
       - name: Print Findings
         run: |
           ls -l
           cat codeguru-security-results.sarif.json
 
-      # Note: Code scanning feature needs to be enabled for this repository.
-      # https://docs.github.com/en/enterprise-server@3.10/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-default-setup-for-code-scanning
-      - name: Upload result
+      - name: Upload Result
         uses: github/codeql-action/upload-sarif@v2
         with:
           sarif_file: codeguru-security-results.sarif.json
