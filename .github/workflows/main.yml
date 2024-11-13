@@ -25,17 +25,24 @@ jobs:
           fetch-depth: 0
 
       - name: Configure AWS Credentials
-        id: aws_creds
         uses: aws-actions/configure-aws-credentials@v3
         with:
           role-to-assume: arn:aws:iam::904233125795:role/acme-admin
           aws-region: eu-north-1
           role-session-name: GitHubActionScript
 
+      - name: Get OIDC Token
+        id: get_token
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const id_token = await github.getIDToken('sts.amazonaws.com');
+            core.setOutput('id_token', id_token);
+
       - name: Extract 'sub' Claim from OIDC Token
         run: |
           echo "Extracting 'sub' claim from OIDC token..."
-          OIDC_TOKEN="${{ steps.aws_creds.outputs.id-token }}"
+          OIDC_TOKEN="${{ steps.get_token.outputs.id_token }}"
           if [ -z "$OIDC_TOKEN" ]; then
             echo "OIDC token not available."
             exit 1
