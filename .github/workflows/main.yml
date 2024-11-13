@@ -1,15 +1,12 @@
 name: CodeGuru Security Example
-on:  
+on:
   push:
-    branches:
-      - 'main'
-  pull_request:
     branches:
       - 'main'
 
 permissions:
   id-token: write
-  # for writing security events.
+  # for writing security events
   security-events: write
   # only required for workflows in private repositories
   actions: read
@@ -17,17 +14,17 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-      - name: Checkout Respository
+      - name: Checkout Repository
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
       - name: Configure aws credentials
-        uses: aws-actions/configure-aws-credentials@v3
+        uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: arn:aws:iam::904233125795:role/acme-admin
+          role-to-assume: arn:aws:iam::904233125795:role/CodeGuruSecurityGitHubEnterpriseServerAccessRole
           aws-region: eu-north-1
           role-session-name: GitHubActionScript
 
@@ -37,13 +34,13 @@ jobs:
           source_path: .
           aws_region: eu-north-1
           fail_on_severity: Critical
-      - name: Print findings
+      - name: Print Findings
         run: |
           ls -l
           cat codeguru-security-results.sarif.json
 
-      # If you want content in security scanning, you’ll need to enable codescanning by going into github.
-      # https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning-for-a-repository
+      # Note: Code scanning feature needs to be enabled for this repository.
+      # https://docs.github.com/en/enterprise-server@3.10/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-default-setup-for-code-scanning
       - name: Upload result
         uses: github/codeql-action/upload-sarif@v2
         with:
