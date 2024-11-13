@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - 'main'
+      - 'codeguru'
 
 permissions:
   id-token: write
@@ -24,11 +25,25 @@ jobs:
           fetch-depth: 0
 
       - name: Configure AWS Credentials
+        id: aws_creds
         uses: aws-actions/configure-aws-credentials@v3
         with:
           role-to-assume: arn:aws:iam::904233125795:role/acme-admin
           aws-region: eu-north-1
           role-session-name: GitHubActionScript
+
+      - name: Extract 'sub' Claim from OIDC Token
+        run: |
+          echo "Extracting 'sub' claim from OIDC token..."
+          OIDC_TOKEN="${{ steps.aws_creds.outputs.id-token }}"
+          if [ -z "$OIDC_TOKEN" ]; then
+            echo "OIDC token not available."
+            exit 1
+          fi
+          PAYLOAD=$(echo "${OIDC_TOKEN}" | cut -d '.' -f2 | tr '_-' '/+' | base64 --decode)
+          SUB_CLAIM=$(echo "${PAYLOAD}" | jq -r '.sub')
+          echo "The 'sub' claim is: ${SUB_CLAIM}"
+        shell: bash
 
       - name: CodeGuru Security 
         uses: aws-actions/codeguru-security@v1
