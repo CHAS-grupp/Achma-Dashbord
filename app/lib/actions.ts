@@ -1,19 +1,15 @@
+//app/lib/actions.ts
+
 'use server';
 
 import { z } from 'zod';
-import { Pool } from 'pg';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { signIn } from '@/auth';
 import { AuthError } from 'next-auth';
 
-// Initialize PostgreSQL connection pool
-const pool = new Pool({
-  connectionString: process.env.POSTGRES_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-});
+import Invoice from '@/scripts/models/Invoice';
+import Customer from '@/scripts/models/Customer';
 
 // Types for State and Schemas
 export type State = {
@@ -68,12 +64,15 @@ export async function createInvoice(prevState: State, formData: FormData) {
   const date = new Date().toISOString().split('T')[0];
 
   try {
-    await pool.query(
-      `INSERT INTO invoices (customer_id, amount, status, date)
-       VALUES ($1, $2, $3, $4)`,
-      [customerId, amountInCents, status, date],
-    );
+    const newInvoice = new Invoice({
+      customer_id: customerId,
+      amount: amountInCents,
+      status,
+      date,
+    });
+    await newInvoice.save();
   } catch (error) {
+    console.error('Database Error:', error);
     return { message: 'Database Error: Failed to Create Invoice.' };
   }
 
@@ -83,21 +82,30 @@ export async function createInvoice(prevState: State, formData: FormData) {
 
 // Update invoice function
 export async function updateInvoice(id: string, formData: FormData) {
-  const { customerId, amount, status } = UpdateInvoice.parse({
+  const validateFields = UpdateInvoice.safeParse({
     customerId: formData.get('customerId'),
     amount: formData.get('amount'),
     status: formData.get('status'),
   });
+
+  if (!validateFields.success) {
+    return {
+      errors: validateFields.error.flatten().fieldErrors,
+      message: 'Failed to update invoice. Invalid fields.',
+    };
+  }
+
+  const { customerId, amount, status } = validateFields.data;
   const amountInCents = amount * 100;
 
   try {
-    await pool.query(
-      `UPDATE invoices
-       SET customer_id = $1, amount = $2, status = $3
-       WHERE id = $4`,
-      [customerId, amountInCents, status, id],
-    );
+    await Invoice.findByIdAndUpdate(id, {
+      customer_id: customerId,
+      amount: amountInCents,
+      status,
+    });
   } catch (error) {
+    console.error('Database Error:', error);
     return { message: 'Database Error: Failed to Update Invoice.' };
   }
 
@@ -108,40 +116,41 @@ export async function updateInvoice(id: string, formData: FormData) {
 // Delete invoice function
 export async function deleteInvoice(id: string) {
   try {
-    await pool.query(`DELETE FROM invoices WHERE id = $1`, [id]);
+    await Invoice.findByIdAndDelete(id);
     revalidatePath('/dashboard/invoices');
     return { message: 'Deleted Invoice.' };
   } catch (error) {
+    console.error('Database Error:', error);
     return { message: 'Database Error: Failed to Delete Invoice.' };
   }
 }
 
 // Update customer function
 export async function updateCustomer(prevState: any, formData: FormData) {
-  const validatedFields = CustomerSchema.safeParse({
+  const validateFields = CustomerSchema.safeParse({
     id: formData.get('id'),
     name: formData.get('name'),
     email: formData.get('email'),
     image_url: formData.get('image_url'),
   });
 
-  if (!validatedFields.success) {
+  if (!validateFields.success) {
     return {
-      errors: validatedFields.error.flatten().fieldErrors,
+      errors: validateFields.error.flatten().fieldErrors,
       message: 'Missing Fields. Failed to Update Customer.',
     };
   }
 
-  const { id, name, email, image_url } = validatedFields.data;
+  const { id, name, email, image_url } = validateFields.data;
 
   try {
-    await pool.query(
-      `UPDATE customers 
-       SET name = $1, email = $2, image_url = $3
-       WHERE id = $4`,
-      [name, email, image_url, id],
-    );
+    await Customer.findByIdAndUpdate(id, {
+      name,
+      email,
+      image_url,
+    });
   } catch (error) {
+    console.error('Database Error:', error);
     return { message: 'Database Error: Failed to Update Customer.' };
   }
 

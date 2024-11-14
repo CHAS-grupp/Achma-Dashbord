@@ -1,3 +1,5 @@
+//app/dashboard/invoices/%5Bid%5D/edit/page.tsx
+
 import Form from '@/app/ui/invoices/edit-form';
 import Breadcrumbs from '@/app/ui/invoices/breadcrumbs';
 import { fetchInvoiceById, fetchCustomers } from '@/app/lib/data';

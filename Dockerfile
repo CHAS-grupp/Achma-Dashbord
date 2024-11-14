@@ -36,3 +36,5 @@ EXPOSE 3000
 
 # 12. Ange startkommandot för att köra Next.js-applikationen
 CMD ["npm", "start"]
+
+

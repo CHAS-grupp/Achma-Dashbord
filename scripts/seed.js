@@ -1,166 +1,228 @@
-const { Client } = require('pg');
+/* // seed.js (bytt från .mjs till .js för att använda CommonJS)
 
-const db = new Client({
-  connectionString: process.env.POSTGRES_URL,
-  user: process.env.POSTGRES_USER,
-  password: process.env.POSTGRES_PASSWORD,
-  host: process.env.POSTGRES_HOST,
-  port: process.env.POSTGRES_PORT,
-  database: process.env.POSTGRES_DATABASE,
-});
 
-const {
-  invoices,
-  customers,
-  revenue,
-  users,
-} = require('../app/lib/placeholder-data.js');
+
+require('dotenv').config(); // Ladda .env-filen
+const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
-async function seedUsers(client) {
+const User = require('./models/Users');
+const Customer = require('./models/Customer');
+const Invoice = require('./models/Invoice');
+const Revenue = require('./models/Revenue');
+const { invoices, customers, revenue, users } = require('../app/lib/placeholder-data.js');
+
+// Anslut till MongoDB
+const uri = process.env.DATABASE;
+
+mongoose.connect(uri)
+  .then(() => console.log('Connected successfully to MongoDB'))
+  .catch((error) => console.error('Connection error:', error));
+
+async function seedUsers() {
   try {
-    await client.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
-    // Create the "users" table if it doesn't exist
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        email TEXT NOT NULL UNIQUE,
-        password TEXT NOT NULL
-      );
-    `);
-    console.log(`Created "users" table`);
-    // Insert data into the "users" table
+    // Skapa användare med hashade lösenord
     const insertedUsers = await Promise.all(
       users.map(async (user) => {
         const hashedPassword = await bcrypt.hash(user.password, 10);
-        return client.query(
-          `
-          INSERT INTO users (id, name, email, password)
-          VALUES ($1, $2, $3, $4)
-          ON CONFLICT (id) DO NOTHING;`,
-          [user.id, user.name, user.email, hashedPassword],
+        return User.updateOne(
+          { email: user.email },
+          { $setOnInsert: { ...user, password: hashedPassword } },
+          { upsert: true }
         );
-      }),
+      })
     );
     console.log(`Seeded ${insertedUsers.length} users`);
   } catch (error) {
     console.error('Error seeding users:', error);
-    throw error;
   }
 }
-async function seedInvoices(client) {
+
+async function seedCustomers() {
   try {
-    await client.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
-    // Create the "invoices" table if it doesn't exist
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS invoices (
-        id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-        customer_id UUID NOT NULL,
-        amount INT NOT NULL,
-        status VARCHAR(255) NOT NULL,
-        date DATE NOT NULL
-      );
-    `);
-    console.log(`Created "invoices" table`);
-    // Insert data into the "invoices" table
-    const insertedInvoices = await Promise.all(
-      invoices.map((invoice) =>
-        client.query(
-          `
-        INSERT INTO invoices (customer_id, amount, status, date)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (id) DO NOTHING;`,
-          [invoice.customer_id, invoice.amount, invoice.status, invoice.date],
-        ),
-      ),
-    );
-    console.log(`Seeded ${insertedInvoices.length} invoices`);
-  } catch (error) {
-    console.error('Error seeding invoices:', error);
-    throw error;
-  }
-}
-async function seedCustomers(client) {
-  try {
-    await client.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
-    // Create the "customers" table if it doesn't exist
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS customers (
-        id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        email VARCHAR(255) NOT NULL,
-        image_url VARCHAR(255) NOT NULL
-      );
-    `);
-    console.log(`Created "customers" table`);
-    // Insert data into the "customers" table
     const insertedCustomers = await Promise.all(
       customers.map((customer) =>
-        client.query(
-          `
-        INSERT INTO customers (id, name, email, image_url)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (id) DO NOTHING;`,
-          [customer.id, customer.name, customer.email, customer.image_url],
-        ),
-      ),
+        Customer.updateOne(
+          { email: customer.email },
+          { $setOnInsert: customer },
+          { upsert: true }
+        )
+      )
     );
     console.log(`Seeded ${insertedCustomers.length} customers`);
   } catch (error) {
     console.error('Error seeding customers:', error);
-    throw error;
   }
 }
-async function seedRevenue(client) {
+
+async function seedInvoices() {
   try {
-    // Create the "revenue" table if it doesn't exist
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS revenue (
-        month VARCHAR(4) NOT NULL UNIQUE,
-        revenue INT NOT NULL
-      );
-    `);
-    console.log(`Created "revenue" table`);
-    // Insert data into the "revenue" table
+    const insertedInvoices = await Promise.all(
+      invoices.map((invoice) =>
+        Invoice.updateOne(
+          { id: invoice.id },
+          { $setOnInsert: invoice },
+          { upsert: true }
+        )
+      )
+    );
+    console.log(`Seeded ${insertedInvoices.length} invoices`);
+  } catch (error) {
+    console.error('Error seeding invoices:', error);
+  }
+}
+
+async function seedRevenue() {
+  try {
     const insertedRevenue = await Promise.all(
       revenue.map((rev) =>
-        client.query(
-          `
-        INSERT INTO revenue (month, revenue)
-        VALUES ($1, $2)
-        ON CONFLICT (month) DO NOTHING;`,
-          [rev.month, rev.revenue],
-        ),
-      ),
+        Revenue.updateOne(
+          { month: rev.month },
+          { $setOnInsert: rev },
+          { upsert: true }
+        )
+      )
     );
     console.log(`Seeded ${insertedRevenue.length} revenue`);
   } catch (error) {
     console.error('Error seeding revenue:', error);
-    throw error;
   }
 }
+
 async function main() {
-  const client = new Client({
-    connectionString: process.env.POSTGRES_URL,
-    ssl: {
-      rejectUnauthorized: false,
-    },
-  });
   try {
-    await client.connect();
-    console.log('Connected to the database.');
-    await seedUsers(client);
-    await seedCustomers(client);
-    await seedInvoices(client);
-    await seedRevenue(client);
+    await seedUsers();
+    await seedCustomers();
+    await seedInvoices();
+    await seedRevenue();
+    console.log('Database seeding completed');
   } catch (err) {
-    console.error(
-      'An error occurred while attempting to seed the database:',
-      err,
-    );
+    console.error('An error occurred during seeding:', err);
   } finally {
-    await client.end();
-    console.log('Database connection closed.');
+    mongoose.connection.close(); // Stäng anslutningen
   }
 }
+
+main();
+
+
+
+ */
+
+
+// seed.js
+require('dotenv').config(); // Ladda .env-filen
+const connectDB = require('../scripts/db'); // Importera den uppdaterade anslutningsfunktionen
+const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
+const User = require('./models/Users');
+const Customer = require('./models/Customer');
+const Invoice = require('./models/Invoice');
+const Revenue = require('./models/Revenue');
+const { invoices, customers, revenue, users } = require('../app/lib/placeholder-data.js');
+
+async function seedUsers() {
+  try {
+    const insertedUsers = await Promise.all(
+      users.map(async (user) => {
+        const hashedPassword = await bcrypt.hash(user.password, 10);
+        return User.updateOne(
+          { email: user.email },
+          { $setOnInsert: { ...user, password: hashedPassword } },
+          { upsert: true }
+        );
+      })
+    );
+    console.log(`Seeded ${insertedUsers.length} users`);
+  } catch (error) {
+    console.error('Error seeding users:', error);
+  }
+}
+
+async function seedCustomers() {
+  try {
+    const insertedCustomers = await Promise.all(
+      customers.map((customer) =>
+        Customer.updateOne(
+          { email: customer.email },
+          { $setOnInsert: customer },
+          { upsert: true }
+        )
+      )
+    );
+    console.log(`Seeded ${insertedCustomers.length} customers`);
+  } catch (error) {
+    console.error('Error seeding customers:', error);
+  }
+}
+
+async function seedInvoices() {
+  try {
+    const insertedInvoices = await Promise.all(
+      invoices.map((invoice) => {
+        // Skapar ett nytt ObjectId om det inte redan finns
+        return Invoice.updateOne(
+          { _id: invoice._id || new mongoose.Types.ObjectId() },
+          { $setOnInsert: { ...invoice } },
+          { upsert: true }
+        );
+      })
+    );
+    console.log(`Seeded ${insertedInvoices.length} invoices`);
+  } catch (error) {
+    console.error('Error seeding invoices:', error);
+  }
+}
+
+async function seedRevenue() {
+  try {
+    const insertedRevenue = await Promise.all(
+      revenue.map((rev) =>
+        Revenue.updateOne(
+          { month: rev.month },
+          { $setOnInsert: rev },
+          { upsert: true }
+        )
+      )
+    );
+    console.log(`Seeded ${insertedRevenue.length} revenue`);
+  } catch (error) {
+    console.error('Error seeding revenue:', error);
+  }
+}
+
+async function main() {
+  try {
+    // Anslut till databasen
+    await connectDB();
+
+    // Rensa gamla index om de finns
+    await Invoice.collection.dropIndexes().catch((error) => {
+      if (error.codeName === 'IndexNotFound') {
+        console.log('No indexes to drop on Invoices.');
+      } else {
+        console.error('Error dropping indexes:', error);
+      }
+    });
+
+    // Seeda databasen
+    await seedUsers();
+    await seedCustomers();
+    await seedInvoices();
+    await seedRevenue();
+    console.log('Database seeding completed');
+  } catch (err) {
+    console.error('An error occurred during seeding:', err);
+  } finally {
+    // Stäng anslutningen endast om den är ansluten
+    if (mongoose.connection.readyState !== 0) {
+      try {
+        await mongoose.connection.close(); // Använd await istället för callback
+        console.log('MongoDB connection closed.');
+      } catch (closeError) {
+        console.error('Failed to close MongoDB connection:', closeError);
+      }
+    }
+  }
+}
+
 main();

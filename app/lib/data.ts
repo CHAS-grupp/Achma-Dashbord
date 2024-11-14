@@ -1,3 +1,5 @@
+/* //app/lib/data.ts
+
 import { Pool } from 'pg';
 import {
   CustomerField,
@@ -228,3 +230,151 @@ export async function getUser(email: string) {
     throw new Error('Failed to fetch user.');
   }
 }
+ */
+
+
+//
+// Fil: data.ts
+
+import Revenue from '@/scripts/models/Revenue.js';
+import Invoice from '@/scripts/models/Invoice.js';
+import Customer from '@/scripts/models/Customer.js';
+import User from '@/scripts/models/Users.js';
+import { unstable_noStore as noStore } from 'next/cache';
+import { formatCurrency } from './utils';
+import connectDB from '@/scripts/db.js';
+
+// Funktion för att hämta revenue
+async function fetchRevenue() {
+  await connectDB(); // Säkerställ att anslutningen är upprättad
+  noStore();
+  try {
+    console.log('Fetching revenue data...');
+    const data = await Revenue.find({});
+    console.log('Data fetch completed.');
+    return data;
+  } catch (error) {
+    console.error('Database Error:', error);
+    throw new Error('Failed to fetch revenue data.');
+  }
+}
+
+// Funktion för att hämta de senaste fakturorna
+async function fetchLatestInvoices() {
+  await connectDB(); // Säkerställ att anslutningen är upprättad
+  noStore();
+  try {
+    console.log('Fetching latest invoice data...');
+    const invoices = await Invoice.find().sort({ date: -1 }).limit(5).populate('customer_id');
+    const latestInvoices = invoices.map(invoice => ({
+      ...invoice.toObject(),
+      amount: formatCurrency(invoice.amount),
+    }));
+    return latestInvoices;
+  } catch (error) {
+    console.error('Database Error:', error);
+    throw new Error('Failed to fetch the latest invoices.');
+  }
+}
+
+// Funktion för att hämta fakturor med sidindelning
+async function fetchInvoicesPages(query: string, currentPage: number) {
+  await connectDB(); // Säkerställ att anslutningen är upprättad
+  const ITEMS_PER_PAGE = 6;
+  const offset = (currentPage - 1) * ITEMS_PER_PAGE;
+
+  try {
+    const searchConditions = [];
+    
+    // Kontrollera om query är ett nummer eller en sträng och justera sökningen
+    if (!isNaN(Number(query))) {
+      searchConditions.push({ 'amount': Number(query) });
+    } else if (query) {
+      searchConditions.push(
+        { 'date': { $regex: query, $options: 'i' } },
+        { 'status': { $regex: query, $options: 'i' } }
+      );
+    }
+
+    // Utför sökningen med filtrerade villkor
+    const invoices = await Invoice.find(
+      searchConditions.length > 0 ? { $or: searchConditions } : {}
+    ).skip(offset).limit(ITEMS_PER_PAGE);
+
+    // Hämta totala antalet fakturor för pagination
+    const totalInvoicesCount = await Invoice.countDocuments(
+      searchConditions.length > 0 ? { $or: searchConditions } : {}
+    );
+
+    return {
+      invoices,
+      totalPages: Math.ceil(totalInvoicesCount / ITEMS_PER_PAGE),
+    };
+  } catch (error) {
+    console.error('Database Error:', error);
+    throw new Error('Failed to fetch invoices with pagination.');
+  }
+}
+
+// Funktion för att hämta faktura efter ID
+async function fetchInvoiceById(id: string) {
+  await connectDB(); // Säkerställ att anslutningen är upprättad
+  try {
+    const invoice = await Invoice.findById(id).populate('customer_id');
+    return invoice;
+  } catch (error) {
+    console.error('Database Error:', error);
+    throw new Error('Failed to fetch invoice by ID.');
+  }
+}
+
+// Funktion för att hämta kunder
+async function fetchCustomers() {
+  await connectDB(); // Säkerställ att anslutningen är upprättad
+  try {
+    const customers = await Customer.find().sort({ name: 'asc' }).exec();
+    return customers;
+  } catch (error) {
+    console.error('Database Error:', error);
+    throw new Error('Failed to fetch customers.');
+  }
+}
+
+// Funktion för att hämta kortdata
+async function fetchCardData() {
+  await connectDB(); // Säkerställ att anslutningen är upprättad
+  noStore();
+  try {
+    console.log('Fetching card data...');
+    const invoiceCount = await Invoice.countDocuments();
+    const customerCount = await Customer.countDocuments();
+    const paidInvoices = await Invoice.aggregate([
+      { $match: { status: 'paid' } },
+      { $group: { _id: null, total: { $sum: "$amount" } } }
+    ]);
+    const pendingInvoices = await Invoice.aggregate([
+      { $match: { status: 'pending' } },
+      { $group: { _id: null, total: { $sum: "$amount" } } }
+    ]);
+
+    return {
+      numberOfInvoices: invoiceCount,
+      numberOfCustomers: customerCount,
+      totalPaidInvoices: formatCurrency(paidInvoices[0]?.total || 0),
+      totalPendingInvoices: formatCurrency(pendingInvoices[0]?.total || 0),
+    };
+  } catch (error) {
+    console.error('Failed to fetch card data:', error);
+    throw new Error('Failed to fetch card data.');
+  }
+}
+
+// Exportera alla funktioner
+export {
+  fetchRevenue,
+  fetchLatestInvoices,
+  fetchInvoicesPages,
+  fetchInvoiceById,
+  fetchCustomers,
+  fetchCardData,
+};
