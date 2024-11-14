@@ -32,7 +32,7 @@ COPY --from=builder /app/ .
 ENV NODE_ENV=production
 
 # 11. Exponera en port för att köra applikationen (justera om nödvändigt)
-EXPOSE 3000
+EXPOSE 3001
 
 # 12. Ange startkommandot för att köra Next.js-applikationen
 CMD ["npm", "start"]
